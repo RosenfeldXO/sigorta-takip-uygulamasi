@@ -5,6 +5,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
 import uuid
 import urllib.parse
+import re # Düzenli ifadeler kütüphanesi (Temizlik için)
 
 # --- SAYFA AYARLARI ---
 st.set_page_config(page_title="Sigorta Yönetim Paneli", page_icon="🛡️", layout="wide")
@@ -49,7 +50,6 @@ def google_takvim_linki_uret(baslik, bitis_tarihi_str, detay):
         tarih_obj = datetime.strptime(bitis_tarihi_str, "%Y-%m-%d")
         baslangic = tarih_obj.strftime("%Y%m%d")
         bitis = (tarih_obj + timedelta(days=1)).strftime("%Y%m%d")
-        
         text = urllib.parse.quote(baslik)
         details = urllib.parse.quote(detay)
         url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={text}&dates={baslangic}/{bitis}&details={details}"
@@ -57,37 +57,35 @@ def google_takvim_linki_uret(baslik, bitis_tarihi_str, detay):
     except:
         return "#"
 
-# --- PARA BİRİMİ DÜZELTME FONKSİYONU (YENİ) ---
-def tutar_duzelt(deger):
-    if pd.isna(deger) or deger == "":
+# --- GELİŞMİŞ TUTAR TEMİZLEYİCİ (ÇÖZÜM BURADA) ---
+def tutar_temizle(deger):
+    # 1. Veriyi stringe çevir ve boşlukları temizle
+    s = str(deger).strip()
+    
+    # 2. Eğer boşsa, tire ise veya tanımsızsa 0 döndür
+    if not s or s in ["-", "--", "nan", "None", "null"]:
         return 0.0
     
-    # Eğer zaten sayıysa (int veya float), direkt döndür (Bozma)
-    if isinstance(deger, (int, float)):
-        return float(deger)
+    # 3. Sadece sayıları, noktayı ve virgülü bırak (TL yazısı vs. silinir)
+    # Örn: "14.826,14 TL" -> "14.826,14"
+    s = re.sub(r"[^0-9,.]", "", s)
     
-    # Eğer metinse temizle
-    deger_str = str(deger).replace("TL", "").replace("₺", "").strip()
+    # 4. Format Düzeltme (Türk Lirası Formatı: Binlik=Nokta, Kuruş=Virgül)
+    # Önce Binlik ayracı olan noktaları tamamen kaldırıyoruz (14.826 -> 14826)
+    s = s.replace(".", "")
     
-    # Türk Lirası formatı kontrolü (1.500,50 gibi mi?)
-    if "," in deger_str:
-        # Noktaları (binlik ayracı) sil, Virgülü (kuruş) nokta yap
-        deger_str = deger_str.replace(".", "").replace(",", ".")
-    else:
-        # Sadece nokta varsa ve sayı formatındaysa (1500.50 gibi) dokunma
-        # Ama 1.500 gibi binlik ayracıysa silmemiz lazım. 
-        # Python karışmasın diye basit bir mantık:
-        pass 
-
+    # Sonra Kuruş ayracı olan virgülü noktaya çeviriyoruz (Python formatı: 14826,14 -> 14826.14)
+    s = s.replace(",", ".")
+    
     try:
-        return float(deger_str)
+        return float(s)
     except:
         return 0.0
 
 def veri_hazirla(df):
     if not df.empty and 'Tutar' in df.columns:
-        # Yeni akıllı fonksiyonu her satıra uygula
-        df['Tutar_Sayi'] = df['Tutar'].apply(tutar_duzelt)
+        # Her satırı tek tek temizle
+        df['Tutar_Sayi'] = df['Tutar'].apply(tutar_temizle)
     return df
 
 # --- ARAYÜZ ---
@@ -108,7 +106,6 @@ if menu == "Yeni Poliçe Kes":
 
     secilen_tur = st.selectbox("Sigorta Türü Seçiniz:", 
                                ["Trafik Sigortası", "Kasko", "DASK", "Konut", "Sağlık", "Seyahat"])
-    
     arac_sigortasi_mi = secilen_tur in ["Trafik Sigortası", "Kasko"]
     st.markdown("---") 
 
@@ -121,7 +118,6 @@ if menu == "Yeni Poliçe Kes":
             tc_no = st.text_input("T.C. / Vergi No")
             dogum_tarihi = st.date_input("Doğum Tarihi", min_value=datetime(1930, 1, 1), max_value=datetime.now())
             tel = st.text_input("Telefon (5XX...)", max_chars=10)
-        
         with col2:
             st.subheader("📄 Poliçe Detayları")
             sirket = st.selectbox("Sigorta Firması", ["Allianz", "Axa", "Anadolu", "Sompo", "Mapfre", "Türkiye Sigorta", "HDI", "Diğer"])
@@ -237,11 +233,12 @@ elif menu == "Raporlar":
         
         with st.expander("💰 Detaylı Finansal Rapor"):
             c1, c2 = st.columns(2)
-            
+            # Firma Özeti
             firma_ozeti = df.groupby('Sigorta_Sirketi')['Tutar_Sayi'].sum().sort_values(ascending=False).reset_index()
             firma_ozeti['Tutar_Sayi'] = firma_ozeti['Tutar_Sayi'].apply(lambda x: f"{x:,.2f} ₺")
             c1.dataframe(firma_ozeti, use_container_width=True)
             
+            # Tür Özeti
             tur_ozeti = df.groupby('Sigorta_Turu')['Tutar_Sayi'].sum().sort_values(ascending=False).reset_index()
             tur_ozeti['Tutar_Sayi'] = tur_ozeti['Tutar_Sayi'].apply(lambda x: f"{x:,.2f} ₺")
             c2.dataframe(tur_ozeti, use_container_width=True)
