@@ -99,4 +99,101 @@ if menu == "Yeni Poliçe Kes":
         plaka, ruhsat, model, yil = "-", "-", "-", "-"
         
         if arac_sigortasi_mi:
-            st
+            st.info(f"🚗 {secilen_tur} için Araç Bilgileri:")
+            c_arac1, c_arac2 = st.columns(2)
+            plaka = c_arac1.text_input("Plaka (Örn: 34ABC123)")
+            ruhsat = c_arac2.text_input("Ruhsat Seri No")
+            model = c_arac1.text_input("Araç Marka/Model")
+            yil = c_arac2.number_input("Araç Yılı", min_value=1950, max_value=2030, step=1, value=2020)
+        
+        notlar = st.text_area("Ek Notlar")
+        
+        oto_police_no = str(uuid.uuid4().hex[:8]).upper()
+        
+        submitted = st.form_submit_button("✅ Kaydı Tamamla ve Gönder")
+        
+        if submitted:
+            # Validasyon
+            hata_var = False
+            if not ad:
+                st.error("Müşteri Adı boş olamaz!")
+                hata_var = True
+            if arac_sigortasi_mi and (len(plaka) < 3 or not ruhsat):
+                st.error("Trafik/Kasko için Plaka ve Ruhsat zorunludur!")
+                hata_var = True
+            
+            if not hata_var:
+                # Veri Listesi (15 Sütun) - REFERANS EKLENDİ
+                yeni_veri = [
+                    oto_police_no,
+                    ad,
+                    referans, # Yeni eklenen alan
+                    tc_no,
+                    tel,
+                    secilen_tur,
+                    sirket,
+                    plaka,
+                    ruhsat,
+                    model,
+                    str(yil),
+                    str(baslangic),
+                    str(bitis),
+                    tutar,
+                    notlar
+                ]
+                
+                sheet.append_row(yeni_veri)
+                st.success(f"✅ Kayıt Başarılı! Referans: {referans if referans else 'Yok'}")
+                
+                # Aksiyon Butonları
+                c1, c2 = st.columns(2)
+                if tel:
+                    tel_clean = "90" + tel.replace(" ", "").lstrip("0")
+                    msg = f"Sayın {ad}, {sirket} poliçeniz (No:{oto_police_no}) oluşturulmuştur."
+                    wa_url = f"https://wa.me/{tel_clean}?text={urllib.parse.quote(msg)}"
+                    c1.markdown(f"[📲 WhatsApp Mesajı]({wa_url})", unsafe_allow_html=True)
+                
+                cal_detay = f"Müşteri: {ad}\nRef: {referans}\nTel: {tel}\nPlaka: {plaka}"
+                cal_url = google_takvim_linki_uret(f"BİTİŞ: {ad} - {secilen_tur}", str(bitis), cal_detay)
+                c2.markdown(f"[📅 Takvim Hatırlatıcı]({cal_url})", unsafe_allow_html=True)
+
+# --- 2. LİSTELEME EKRANI ---
+elif menu == "Kayıtları İncele":
+    st.header("📂 Kayıt Listesi")
+    arama = st.text_input("🔍 İsim, Plaka, Referans veya TC Ara")
+    
+    if not df.empty:
+        goster_df = df
+        if arama:
+            # Tüm sütunlarda arama yapar
+            goster_df = df[df.astype(str).apply(lambda x: x.str.contains(arama, case=False)).any(axis=1)]
+        st.dataframe(goster_df, use_container_width=True)
+    else:
+        st.info("Kayıt bulunamadı.")
+
+# --- 3. RAPORLAR ---
+elif menu == "Raporlar":
+    st.header("📊 Performans Raporu")
+    if not df.empty:
+        col1, col2 = st.columns(2)
+        col1.metric("Toplam Poliçe", len(df))
+        
+        if 'Tutar' in df.columns:
+            df['Tutar_Sayi'] = pd.to_numeric(df['Tutar'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
+            col2.metric("Toplam Hacim", f"{df['Tutar_Sayi'].sum():,.2f} ₺")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.subheader("Referans Dağılımı")
+            if 'Referans' in df.columns:
+                # Boş referansları filtrele
+                ref_counts = df[df['Referans'] != ""]['Referans'].value_counts()
+                if not ref_counts.empty:
+                    st.bar_chart(ref_counts)
+                else:
+                    st.info("Henüz referans verisi yok.")
+        
+        with c2:
+             st.subheader("Ürün Dağılımı")
+             if 'Sigorta_Sirketi' in df.columns:
+                st.bar_chart(df['Sigorta_Sirketi'].value_counts())
