@@ -45,11 +45,17 @@ except Exception as e:
 
 # --- YARDIMCI FONKSİYONLAR ---
 def google_takvim_linki_uret(baslik, bitis_tarihi_str, detay):
+    """
+    Google Takvim linki üretir. Detay kısmındaki \n (yeni satır) karakterlerini
+    web uyumlu hale getirir.
+    """
     tarih_obj = datetime.strptime(bitis_tarihi_str, "%Y-%m-%d")
     baslangic = tarih_obj.strftime("%Y%m%d")
     bitis = (tarih_obj + timedelta(days=1)).strftime("%Y%m%d")
+    
     text = urllib.parse.quote(baslik)
-    details = urllib.parse.quote(detay)
+    details = urllib.parse.quote(detay) # Detayları URL formatına çevir
+    
     url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={text}&dates={baslangic}/{bitis}&details={details}"
     return url
 
@@ -69,7 +75,7 @@ except:
 if menu == "Yeni Poliçe Kes":
     st.header("📝 Yeni Poliçe Girişi")
 
-    # Sigorta Türü Seçimi (Form Dışı)
+    # Sigorta Türü Seçimi
     secilen_tur = st.selectbox("Sigorta Türü Seçiniz:", 
                                ["Trafik Sigortası", "Kasko", "DASK", "Konut", "Sağlık", "Seyahat"])
     
@@ -84,7 +90,7 @@ if menu == "Yeni Poliçe Kes":
         with col1:
             st.subheader("👤 Müşteri Bilgileri")
             ad = st.text_input("Ad Soyad / Ünvan")
-            referans = st.text_input("Referans (Kim Yönlendirdi?)", placeholder="Örn: Ahmet Bey / Sahibinden") # YENİ ALAN
+            referans = st.text_input("Referans (Opsiyonel)")
             tc_no = st.text_input("T.C. / Vergi No")
             tel = st.text_input("Telefon (5XX...)", max_chars=10)
         
@@ -95,7 +101,7 @@ if menu == "Yeni Poliçe Kes":
             bitis = st.date_input("Bitiş Tarihi", value=baslangic + timedelta(days=365))
             tutar = st.number_input("Poliçe Tutarı (TL)", min_value=0.0, step=100.0)
 
-        # --- ARAÇ BİLGİLERİ (KOŞULLU) ---
+        # --- ARAÇ BİLGİLERİ ---
         plaka, ruhsat, model, yil = "-", "-", "-", "-"
         
         if arac_sigortasi_mi:
@@ -123,39 +129,51 @@ if menu == "Yeni Poliçe Kes":
                 hata_var = True
             
             if not hata_var:
-                # Veri Listesi (15 Sütun) - REFERANS EKLENDİ
+                # Veri Kaydı
                 yeni_veri = [
-                    oto_police_no,
-                    ad,
-                    referans, # Yeni eklenen alan
-                    tc_no,
-                    tel,
-                    secilen_tur,
-                    sirket,
-                    plaka,
-                    ruhsat,
-                    model,
-                    str(yil),
-                    str(baslangic),
-                    str(bitis),
-                    tutar,
-                    notlar
+                    oto_police_no, ad, referans, tc_no, tel,
+                    secilen_tur, sirket, plaka, ruhsat, model,
+                    str(yil), str(baslangic), str(bitis), tutar, notlar
                 ]
-                
                 sheet.append_row(yeni_veri)
-                st.success(f"✅ Kayıt Başarılı! Referans: {referans if referans else 'Yok'}")
+                st.success(f"✅ Kayıt Başarılı! Poliçe No: {oto_police_no}")
                 
-                # Aksiyon Butonları
+                # --- TAKVİM MESAJINI HAZIRLAMA (ÖZEL FORMAT) ---
+                
+                # Standart Mesaj
+                takvim_mesaji = f"📌 SİGORTA HATIRLATMASI\n" \
+                                f"------------------------\n" \
+                                f"👤 Müşteri: {ad}\n" \
+                                f"📞 Telefon: {tel}\n" \
+                                f"🆔 T.C. No: {tc_no}\n" \
+                                f"🛡️ Sigorta Türü: {secilen_tur}\n" \
+                                f"📄 Poliçe No: {oto_police_no}\n" \
+                                f"🏢 Şirket: {sirket}\n"
+
+                # Araç ise ekstra bilgileri ekle
+                if arac_sigortasi_mi:
+                    takvim_mesaji += f"------------------------\n" \
+                                     f"🚗 ARAÇ BİLGİLERİ:\n" \
+                                     f"🚘 Plaka: {plaka}\n" \
+                                     f"📜 Ruhsat: {ruhsat}\n" \
+                                     f"🚙 Model: {model} ({yil})\n"
+                
+                if referans:
+                    takvim_mesaji += f"🤝 Referans: {referans}"
+
+                # Linkleri Oluştur
                 c1, c2 = st.columns(2)
+                
+                # WhatsApp Linki
                 if tel:
                     tel_clean = "90" + tel.replace(" ", "").lstrip("0")
                     msg = f"Sayın {ad}, {sirket} poliçeniz (No:{oto_police_no}) oluşturulmuştur."
                     wa_url = f"https://wa.me/{tel_clean}?text={urllib.parse.quote(msg)}"
                     c1.markdown(f"[📲 WhatsApp Mesajı]({wa_url})", unsafe_allow_html=True)
                 
-                cal_detay = f"Müşteri: {ad}\nRef: {referans}\nTel: {tel}\nPlaka: {plaka}"
-                cal_url = google_takvim_linki_uret(f"BİTİŞ: {ad} - {secilen_tur}", str(bitis), cal_detay)
-                c2.markdown(f"[📅 Takvim Hatırlatıcı]({cal_url})", unsafe_allow_html=True)
+                # Takvim Linki (Yeni Mesaj İle)
+                cal_url = google_takvim_linki_uret(f"BİTİŞ: {ad} - {plaka}", str(bitis), takvim_mesaji)
+                c2.markdown(f"[📅 Takvime Hatırlatıcı Ekle]({cal_url})", unsafe_allow_html=True)
 
 # --- 2. LİSTELEME EKRANI ---
 elif menu == "Kayıtları İncele":
@@ -165,7 +183,6 @@ elif menu == "Kayıtları İncele":
     if not df.empty:
         goster_df = df
         if arama:
-            # Tüm sütunlarda arama yapar
             goster_df = df[df.astype(str).apply(lambda x: x.str.contains(arama, case=False)).any(axis=1)]
         st.dataframe(goster_df, use_container_width=True)
     else:
@@ -182,18 +199,4 @@ elif menu == "Raporlar":
             df['Tutar_Sayi'] = pd.to_numeric(df['Tutar'].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
             col2.metric("Toplam Hacim", f"{df['Tutar_Sayi'].sum():,.2f} ₺")
         
-        c1, c2 = st.columns(2)
-        with c1:
-            st.subheader("Referans Dağılımı")
-            if 'Referans' in df.columns:
-                # Boş referansları filtrele
-                ref_counts = df[df['Referans'] != ""]['Referans'].value_counts()
-                if not ref_counts.empty:
-                    st.bar_chart(ref_counts)
-                else:
-                    st.info("Henüz referans verisi yok.")
-        
-        with c2:
-             st.subheader("Ürün Dağılımı")
-             if 'Sigorta_Sirketi' in df.columns:
-                st.bar_chart(df['Sigorta_Sirketi'].value_counts())
+        st.bar_chart(df['Sigorta_Sirketi'].value_counts())
