@@ -57,9 +57,37 @@ def google_takvim_linki_uret(baslik, bitis_tarihi_str, detay):
     except:
         return "#"
 
+# --- PARA BİRİMİ DÜZELTME FONKSİYONU (YENİ) ---
+def tutar_duzelt(deger):
+    if pd.isna(deger) or deger == "":
+        return 0.0
+    
+    # Eğer zaten sayıysa (int veya float), direkt döndür (Bozma)
+    if isinstance(deger, (int, float)):
+        return float(deger)
+    
+    # Eğer metinse temizle
+    deger_str = str(deger).replace("TL", "").replace("₺", "").strip()
+    
+    # Türk Lirası formatı kontrolü (1.500,50 gibi mi?)
+    if "," in deger_str:
+        # Noktaları (binlik ayracı) sil, Virgülü (kuruş) nokta yap
+        deger_str = deger_str.replace(".", "").replace(",", ".")
+    else:
+        # Sadece nokta varsa ve sayı formatındaysa (1500.50 gibi) dokunma
+        # Ama 1.500 gibi binlik ayracıysa silmemiz lazım. 
+        # Python karışmasın diye basit bir mantık:
+        pass 
+
+    try:
+        return float(deger_str)
+    except:
+        return 0.0
+
 def veri_hazirla(df):
     if not df.empty and 'Tutar' in df.columns:
-        df['Tutar_Sayi'] = pd.to_numeric(df['Tutar'].astype(str).str.replace('.', '').str.replace(',', '.'), errors='coerce').fillna(0)
+        # Yeni akıllı fonksiyonu her satıra uygula
+        df['Tutar_Sayi'] = df['Tutar'].apply(tutar_duzelt)
     return df
 
 # --- ARAYÜZ ---
@@ -91,7 +119,6 @@ if menu == "Yeni Poliçe Kes":
             ad = st.text_input("Ad Soyad / Ünvan")
             referans = st.text_input("Referans (Opsiyonel)")
             tc_no = st.text_input("T.C. / Vergi No")
-            # YENİ ALAN: DOĞUM TARİHİ
             dogum_tarihi = st.date_input("Doğum Tarihi", min_value=datetime(1930, 1, 1), max_value=datetime.now())
             tel = st.text_input("Telefon (5XX...)", max_chars=10)
         
@@ -108,7 +135,6 @@ if menu == "Yeni Poliçe Kes":
             c_arac1, c_arac2 = st.columns(2)
             plaka = c_arac1.text_input("Plaka (Örn: 34ABC123)")
             ruhsat = c_arac2.text_input("Ruhsat Seri No")
-            # ARAÇ YILI KALDIRILDI, SADECE MODEL VAR
             model = st.text_input("Araç Marka/Model ve Yılı (Örn: Toyota Corolla 2020)")
         
         notlar = st.text_area("Ek Notlar")
@@ -126,12 +152,11 @@ if menu == "Yeni Poliçe Kes":
                 hata_var = True
             
             if not hata_var:
-                # Veri Listesi (Yeni Sıralama)
                 yeni_veri = [
                     oto_police_no, ad, referans, tc_no, 
-                    str(dogum_tarihi), # YENİ EKLENEN
+                    str(dogum_tarihi),
                     tel, secilen_tur, sirket, plaka, ruhsat, 
-                    model, # YIL ÇIKARILDI
+                    model,
                     str(baslangic), str(bitis), tutar, notlar, "Hayır"
                 ]
                 sheet.append_row(yeni_veri)
@@ -151,7 +176,7 @@ elif menu == "Kayıtları İncele":
             goster_df = df[df.astype(str).apply(lambda x: x.str.contains(arama, case=False)).any(axis=1)]
 
         def renk_ver(val):
-            color = '#d4edda' if val == "Evet" else '#f8d7da'
+            color = '#d4edda' if "✅" in str(val) else '#f8d7da'
             return f'background-color: {color}'
 
         st.dataframe(
@@ -169,7 +194,6 @@ elif menu == "Kayıtları İncele":
             secilen_id = secilen_kayit_str.split(" - ")[0]
             kayit = df[df['PoliceNo'] == secilen_id].iloc[0]
             
-            # Takvim Mesajı Güncellendi (Doğum Tarihi Eklendi, Yıl Kaldırıldı)
             takvim_mesaji = f"📌 SİGORTA HATIRLATMASI\n------------------------\n" \
                             f"👤 Müşteri: {kayit['Musteri']}\n" \
                             f"🎂 D.Tarihi: {kayit['Dogum_Tarihi']}\n" \
@@ -189,7 +213,7 @@ elif menu == "Kayıtları İncele":
             if col_btn2.button("✅ 'Eklendi' Olarak İşaretle"):
                 try:
                     cell = sheet.find(secilen_id)
-                    sheet.update_cell(cell.row, 16, "Evet")
+                    sheet.update_cell(cell.row, 16, "✅")
                     st.success("Güncellendi!")
                     st.rerun()
                 except Exception as e:
@@ -213,12 +237,11 @@ elif menu == "Raporlar":
         
         with st.expander("💰 Detaylı Finansal Rapor"):
             c1, c2 = st.columns(2)
-            # Firma Özeti
+            
             firma_ozeti = df.groupby('Sigorta_Sirketi')['Tutar_Sayi'].sum().sort_values(ascending=False).reset_index()
             firma_ozeti['Tutar_Sayi'] = firma_ozeti['Tutar_Sayi'].apply(lambda x: f"{x:,.2f} ₺")
             c1.dataframe(firma_ozeti, use_container_width=True)
             
-            # Tür Özeti
             tur_ozeti = df.groupby('Sigorta_Turu')['Tutar_Sayi'].sum().sort_values(ascending=False).reset_index()
             tur_ozeti['Tutar_Sayi'] = tur_ozeti['Tutar_Sayi'].apply(lambda x: f"{x:,.2f} ₺")
             c2.dataframe(tur_ozeti, use_container_width=True)
