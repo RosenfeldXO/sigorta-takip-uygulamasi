@@ -12,7 +12,7 @@ st.set_page_config(page_title="Sigorta Yönetim Paneli", page_icon="🛡️", la
 
 # --- GÜVENLİK DUVARI ---
 def giris_kontrol():
-    if 'giris_yapildi' not in st.session_session:
+   if 'giris_yapildi' not in st.session_state:
         st.session_state['giris_yapildi'] = False
 
     if not st.session_state['giris_yapildi']:
