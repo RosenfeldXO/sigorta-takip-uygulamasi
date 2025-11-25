@@ -5,7 +5,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
 import uuid
 import urllib.parse
-import re # Düzenli ifadeler kütüphanesi (Temizlik için)
+import re
 
 # --- SAYFA AYARLARI ---
 st.set_page_config(page_title="Sigorta Yönetim Paneli", page_icon="🛡️", layout="wide")
@@ -57,26 +57,23 @@ def google_takvim_linki_uret(baslik, bitis_tarihi_str, detay):
     except:
         return "#"
 
-# --- GELİŞMİŞ TUTAR TEMİZLEYİCİ (ÇÖZÜM BURADA) ---
 def tutar_temizle(deger):
-    # 1. Veriyi stringe çevir ve boşlukları temizle
     s = str(deger).strip()
-    
-    # 2. Eğer boşsa, tire ise veya tanımsızsa 0 döndür
     if not s or s in ["-", "--", "nan", "None", "null"]:
         return 0.0
     
-    # 3. Sadece sayıları, noktayı ve virgülü bırak (TL yazısı vs. silinir)
-    # Örn: "14.826,14 TL" -> "14.826,14"
+    if isinstance(deger, (int, float)):
+        return float(deger)
+        
     s = re.sub(r"[^0-9,.]", "", s)
     
-    # 4. Format Düzeltme (Türk Lirası Formatı: Binlik=Nokta, Kuruş=Virgül)
-    # Önce Binlik ayracı olan noktaları tamamen kaldırıyoruz (14.826 -> 14826)
-    s = s.replace(".", "")
-    
-    # Sonra Kuruş ayracı olan virgülü noktaya çeviriyoruz (Python formatı: 14826,14 -> 14826.14)
-    s = s.replace(",", ".")
-    
+    if "," in s:
+        s = s.replace(".", "").replace(",", ".")
+        
+    elif "." in s and "," not in s:
+        if len(s.split(".")[-1]) == 3: 
+            s = s.replace(".", "")
+        
     try:
         return float(s)
     except:
@@ -84,7 +81,6 @@ def tutar_temizle(deger):
 
 def veri_hazirla(df):
     if not df.empty and 'Tutar' in df.columns:
-        # Her satırı tek tek temizle
         df['Tutar_Sayi'] = df['Tutar'].apply(tutar_temizle)
     return df
 
@@ -117,7 +113,8 @@ if menu == "Yeni Poliçe Kes":
             referans = st.text_input("Referans (Opsiyonel)")
             tc_no = st.text_input("T.C. / Vergi No")
             dogum_tarihi = st.date_input("Doğum Tarihi", min_value=datetime(1930, 1, 1), max_value=datetime.now())
-            tel = st.text_input("Telefon (5XX...)", max_chars=10)
+            tel = st.text_input("Telefon (5XX...)")
+        
         with col2:
             st.subheader("📄 Poliçe Detayları")
             sirket = st.selectbox("Sigorta Firması", ["Allianz", "Axa", "Anadolu", "Sompo", "Mapfre", "Türkiye Sigorta", "HDI", "Diğer"])
@@ -171,12 +168,29 @@ elif menu == "Kayıtları İncele":
         if arama:
             goster_df = df[df.astype(str).apply(lambda x: x.str.contains(arama, case=False)).any(axis=1)]
 
-        def renk_ver(val):
-            color = '#d4edda' if "✅" in str(val) else '#f8d7da'
-            return f'background-color: {color}'
+        # --- RENKLENDİRME FONKSİYONU (YENİ) ---
+        def renklendir_sutunlar(row):
+            # Varsayılan stil
+            styles = [''] * len(row)
+            
+            # Takvim Durumu için kırmızı/yeşil
+            if row['Takvim_Durumu'] == "✅":
+                # Sadece Takvim_Durumu sütununu yeşil yapar
+                styles[15] = 'background-color: #d4edda' # Açık yeşil
+            else:
+                styles[15] = 'background-color: #f8d7da' # Açık kırmızı
+                
+            # Başlangıç Tarihi (Yeşil)
+            styles[11] = 'background-color: #d4edda' 
+            
+            # Bitiş Tarihi (Kırmızı)
+            styles[12] = 'background-color: #f8d7da'
+            
+            return styles
+
 
         st.dataframe(
-            goster_df.drop(columns=['Tutar_Sayi'], errors='ignore').style.applymap(renk_ver, subset=['Takvim_Durumu']),
+            goster_df.drop(columns=['Tutar_Sayi'], errors='ignore').style.apply(renklendir_sutunlar, axis=1),
             use_container_width=True
         )
 
@@ -222,23 +236,35 @@ elif menu == "Raporlar":
     if df.empty:
         st.warning("Veri yok.")
     else:
+        # --- ANORMALLİK TESPİTİ VE GÖSTERİMİ ---
+        ESIK_DEGER = 100000 
+        hatali_df = df[df['Tutar_Sayi'] > ESIK_DEGER]
+        gercek_ciro = df[df['Tutar_Sayi'] <= ESIK_DEGER]['Tutar_Sayi'].sum()
+        
         col1, col2, col3 = st.columns(3)
         toplam_police = len(df)
         aktif_sirket_sayisi = df['Sigorta_Sirketi'].nunique()
-        toplam_ciro = df['Tutar_Sayi'].sum()
         
         col1.metric("Poliçe Adedi", toplam_police)
         col2.metric("Firma Sayısı", aktif_sirket_sayisi)
-        col3.metric("Toplam Ciro", f"{toplam_ciro:,.2f} ₺")
+        
+        if not hatali_df.empty:
+            col3.metric("Toplam Ciro", f"{gercek_ciro:,.2f} ₺", delta=f"⚠️ {len(hatali_df)} Hatalı Kayıt Hariç", delta_color="inverse")
+            st.error(f"⚠️ DİKKAT! {len(hatali_df)} adet kayıtta anormal yüksek tutar tespit edildi. Cirolarınıza dahil edilmedi.")
+            st.dataframe(hatali_df[['Musteri', 'Sigorta_Turu', 'Tutar', 'Tutar_Sayi']], use_container_width=True)
+        else:
+            col3.metric("Toplam Ciro", f"{gercek_ciro:,.2f} ₺")
+            st.success("✅ Tüm veriler temiz görünüyor.")
+            
+        st.markdown("---")
         
         with st.expander("💰 Detaylı Finansal Rapor"):
             c1, c2 = st.columns(2)
-            # Firma Özeti
+            
             firma_ozeti = df.groupby('Sigorta_Sirketi')['Tutar_Sayi'].sum().sort_values(ascending=False).reset_index()
             firma_ozeti['Tutar_Sayi'] = firma_ozeti['Tutar_Sayi'].apply(lambda x: f"{x:,.2f} ₺")
             c1.dataframe(firma_ozeti, use_container_width=True)
             
-            # Tür Özeti
             tur_ozeti = df.groupby('Sigorta_Turu')['Tutar_Sayi'].sum().sort_values(ascending=False).reset_index()
             tur_ozeti['Tutar_Sayi'] = tur_ozeti['Tutar_Sayi'].apply(lambda x: f"{x:,.2f} ₺")
             c2.dataframe(tur_ozeti, use_container_width=True)
