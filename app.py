@@ -2,14 +2,14 @@ import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime, timedelta # datetime ve timedelta zaten var, kullanıyoruz
+from datetime import datetime, timedelta
 import uuid
 import urllib.parse
 import re
 
 # --- GÜVENLİK AYARLARI ---
-TIMEOUT_DAKIKA = 15 
-TIMEOUT = timedelta(minutes=TIMEOUT_DAKIKA)
+TIMEOUT_DAKIKA = 30 # Değiştirildi: Oturum süresi 30 dakikaya çıkarıldı.
+TIMEOUT = timedelta(minutes=TIMEOUT_DAKIKA) 
 # --------------------------
 
 # --- SAYFA AYARLARI ---
@@ -19,16 +19,14 @@ st.set_page_config(page_title="Sigorta Yönetim Paneli", page_icon="🛡️", la
 def giris_kontrol():
     if 'giris_yapildi' not in st.session_state:
         st.session_state['giris_yapildi'] = False
-        # Zaman damgasını başlat (Çok eski bir zaman, ilk başta zaman aşımına uğramış sayılması için)
-        st.session_state['son_giris_zamani'] = datetime.min 
+        st.session_state['son_giris_zamani'] = datetime.min
         
-    # 1. ZAMAN AŞIMI KONTROLÜ (Giriş yapıldıysa)
+    # 1. ZAMAN AŞIMI KONTROLÜ
     if st.session_state['giris_yapildi']:
         gecen_sure = datetime.now() - st.session_state['son_giris_zamani']
         
         if gecen_sure > TIMEOUT:
             st.session_state['giris_yapildi'] = False
-            # Oturum sona erdi uyarısı ver
             st.warning(f"⚠️ Oturum süresi doldu! {TIMEOUT_DAKIKA} dakika hareketsizlik nedeniyle lütfen yeniden şifre girin.")
 
     # 2. GİRİŞ EKRANI GÖSTERİMİ
@@ -46,7 +44,6 @@ def giris_kontrol():
         st.stop()
         
     # 3. AKTİF OTURUM YENİLEME
-    # Giriş yapıldıysa, uygulamanın her yeniden çalışmasında (kullanıcı etkileşimi) zaman damgasını yenile
     st.session_state['son_giris_zamani'] = datetime.now()
 
 giris_kontrol()
@@ -88,26 +85,25 @@ def tutar_temizle(deger):
     if not s or s in ["-", "--", "nan", "None", "null", "0"]:
         return 0.0
     
-    # 2. Sadece sayıları, virgülü ve noktayı bırak
-    s = re.sub(r"[^0-9,.]", "", s) 
+    if isinstance(deger, (int, float)):
+        return float(deger)
+        
+    s = re.sub(r"[^0-9,.]", "", s)
     
     # 3. Ayıraç Konum Analizi
     last_comma = s.rfind(',')
     last_dot = s.rfind('.')
     
     if last_comma > last_dot:
-        # TR/EUR formatı (Son ayraç virgüldür) -> Binlik noktaları sil, virgülü nokta yap
         s = s.replace('.', '')
         s = s.replace(',', '.')
     elif last_dot > last_comma:
-        # US/INTL formatı (Son ayraç noktadır) -> Binlik virgülleri sil
         s = s.replace(',', '')
     
-    # Kural dışı tek nokta/virgül kaldıysa
     elif last_comma != -1:
-         s = s.replace(',', '.') # Sadece virgül varsa ondalık kabul et
+         s = s.replace(',', '.')
     elif last_dot != -1:
-         s = s.replace('.', '') # Sadece nokta varsa binlik ayracı kabul et
+         s = s.replace('.', '')
     
     try:
         return float(s)
