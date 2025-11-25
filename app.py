@@ -12,7 +12,7 @@ st.set_page_config(page_title="Sigorta Yönetim Paneli", page_icon="🛡️", la
 
 # --- GÜVENLİK DUVARI ---
 def giris_kontrol():
-    if 'giris_yapildi' not in st.session_state:
+    if 'giris_yapildi' not in st.session_session:
         st.session_state['giris_yapildi'] = False
 
     if not st.session_state['giris_yapildi']:
@@ -57,26 +57,33 @@ def google_takvim_linki_uret(baslik, bitis_tarihi_str, detay):
     except:
         return "#"
 
+# --- AKILLI TUTAR TEMİZLEYİCİ (V5.7: Sıkı Türkçe Format Kontrolü) ---
 def tutar_temizle(deger):
+    # 1. Hata Kontrolü
     s = str(deger).strip()
-    if not s or s in ["-", "--", "nan", "None", "null"]:
+    if not s or s in ["-", "--", "nan", "None", "null", "0"]:
         return 0.0
     
-    if isinstance(deger, (int, float)):
-        return float(deger)
-        
-    s = re.sub(r"[^0-9,.]", "", s)
-    
+    # 2. Sadece sayıları, virgülü ve noktayı bırak (TL, boşluk, vb. temizle)
+    s = re.sub(r"[^0-9,.]", "", s) 
+
+    # 3. KURAL: Eğer string virgül içeriyorsa, bu Türkçe formattır.
     if "," in s:
-        s = s.replace(".", "").replace(",", ".")
-        
+        # Tüm binlik ayıraçlarını (nokta) sil. (Örn: 14.826,14 -> 14826,14)
+        s = s.replace(".", "")
+        # Virgülü ondalık nokta yap. (14826,14 -> 14826.14)
+        s = s.replace(",", ".")
+    
+    # 4. KURAL: Virgül yoksa ve nokta varsa (Örn: 15.000 veya 1500.00), noktayı sil.
+    # Sadece son 3 haneden fazlası varsa silme riskini alıyoruz.
     elif "." in s and "," not in s:
-        if len(s.split(".")[-1]) == 3: 
-            s = s.replace(".", "")
+        s = s.replace(".", "")
         
     try:
+        # Son temiz sayıya çevir
         return float(s)
     except:
+        # Eğer hala sayı değilse (muhtemelen TC No/Telefon No), 0 döndür
         return 0.0
 
 def veri_hazirla(df):
@@ -168,15 +175,14 @@ elif menu == "Kayıtları İncele":
         if arama:
             goster_df = df[df.astype(str).apply(lambda x: x.str.contains(arama, case=False)).any(axis=1)]
 
-        # --- RENKLENDİRME FONKSİYONU (YENİLENDİ: color: black eklendi) ---
         def renklendir_sutunlar(row):
             styles = [''] * len(row)
             
             # Takvim Durumu (Index 15)
             if row[15] == "✅":
-                styles[15] = 'background-color: #d4edda; color: black;' # Açık yeşil, SİYAH yazı
+                styles[15] = 'background-color: #d4edda; color: black;'
             else:
-                styles[15] = 'background-color: #f8d7da; color: black;' # Açık kırmızı, SİYAH yazı
+                styles[15] = 'background-color: #f8d7da; color: black;'
                 
             # Başlangıç Tarihi (Index 11 - Yeşil)
             styles[11] = 'background-color: #d4edda; color: black;'
