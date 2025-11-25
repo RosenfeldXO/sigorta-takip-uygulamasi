@@ -20,7 +20,7 @@ def giris_kontrol():
         sifre = st.text_input("Yönetici Şifresi", type="password")
         if st.button("Giriş Yap"):
             if sifre == st.secrets["admin_password"]:
-                st.session_state['giris_yapildi'] = True
+                st.session_session['giris_yapildi'] = True
                 st.rerun()
             else:
                 st.error("Hatalı Şifre!")
@@ -168,23 +168,21 @@ elif menu == "Kayıtları İncele":
         if arama:
             goster_df = df[df.astype(str).apply(lambda x: x.str.contains(arama, case=False)).any(axis=1)]
 
-        # --- RENKLENDİRME FONKSİYONU (YENİ) ---
+        # --- RENKLENDİRME FONKSİYONU (YENİLENDİ: color: black eklendi) ---
         def renklendir_sutunlar(row):
-            # Varsayılan stil
             styles = [''] * len(row)
             
-            # Takvim Durumu için kırmızı/yeşil
-            if row['Takvim_Durumu'] == "✅":
-                # Sadece Takvim_Durumu sütununu yeşil yapar
-                styles[15] = 'background-color: #d4edda' # Açık yeşil
+            # Takvim Durumu (Index 15)
+            if row[15] == "✅":
+                styles[15] = 'background-color: #d4edda; color: black;' # Açık yeşil, SİYAH yazı
             else:
-                styles[15] = 'background-color: #f8d7da' # Açık kırmızı
+                styles[15] = 'background-color: #f8d7da; color: black;' # Açık kırmızı, SİYAH yazı
                 
-            # Başlangıç Tarihi (Yeşil)
-            styles[11] = 'background-color: #d4edda' 
+            # Başlangıç Tarihi (Index 11 - Yeşil)
+            styles[11] = 'background-color: #d4edda; color: black;'
             
-            # Bitiş Tarihi (Kırmızı)
-            styles[12] = 'background-color: #f8d7da'
+            # Bitiş Tarihi (Index 12 - Kırmızı)
+            styles[12] = 'background-color: #f8d7da; color: black;'
             
             return styles
 
