@@ -20,7 +20,7 @@ def giris_kontrol():
         sifre = st.text_input("Yönetici Şifresi", type="password")
         if st.button("Giriş Yap"):
             if sifre == st.secrets["admin_password"]:
-                st.session_session['giris_yapildi'] = True
+                st.session_state['giris_yapildi'] = True
                 st.rerun()
             else:
                 st.error("Hatalı Şifre!")
