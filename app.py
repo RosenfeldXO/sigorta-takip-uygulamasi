@@ -16,7 +16,7 @@ def giris_kontrol():
     if 'giris_yapildi' not in st.session_state:
         st.session_state['giris_yapildi'] = False
 
-    # Girinti Hataları Düzeltildi (Indentation fixed)
+    # Girinti Hataları Düzeltildi
     if not st.session_state['giris_yapildi']:
         st.header("🔒 Yönetici Girişi")
         sifre = st.text_input("Yönetici Şifresi", type="password")
@@ -59,28 +59,39 @@ def google_takvim_linki_uret(baslik, bitis_tarihi_str, detay):
     except:
         return "#"
 
-# --- AKILLI TUTAR TEMİZLEYİCİ ---
+# --- NİHAİ TUTAR TEMİZLEYİCİ (V5.9) ---
 def tutar_temizle(deger):
     s = str(deger).strip()
-    if not s or s in ["-", "--", "nan", "None", "null"]:
+    
+    # 1. Non-Numeric Kontrolü
+    if not s or s in ["-", "--", "nan", "None", "null", "0"]:
         return 0.0
     
-    if isinstance(deger, (int, float)):
-        return float(deger)
-        
-    s = re.sub(r"[^0-9,.]", "", s)
+    # 2. Sadece sayıları, virgülü ve noktayı bırak
+    s = re.sub(r"[^0-9,.]", "", s) 
     
-    # Format Düzeltme: Türk Lirası Formatı
-    if "," in s:
-        s = s.replace(".", "").replace(",", ".")
-        
-    elif "." in s and "," not in s:
-        if len(s.split(".")[-1]) == 3: 
-            s = s.replace(".", "")
-        
+    # 3. Ayıraç Konum Analizi
+    last_comma = s.rfind(',')
+    last_dot = s.rfind('.')
+    
+    if last_comma > last_dot:
+        # TR/EUR formatı (Son ayraç virgüldür) -> Binlik noktaları sil, virgülü nokta yap
+        s = s.replace('.', '')
+        s = s.replace(',', '.')
+    elif last_dot > last_comma:
+        # US/INTL formatı (Son ayraç noktadır) -> Binlik virgülleri sil
+        s = s.replace(',', '')
+    
+    # Kural dışı tek nokta/virgül kaldıysa (Örn: 15.000 veya 15,000)
+    elif last_comma != -1:
+         s = s.replace(',', '.') # Sadece virgül varsa ondalık kabul et
+    elif last_dot != -1:
+         s = s.replace('.', '') # Sadece nokta varsa binlik ayracı kabul et
+    
     try:
         return float(s)
     except:
+        # Hata varsa (TC No/Bozuk veri) 0 döndür
         return 0.0
 
 def veri_hazirla(df):
@@ -175,16 +186,12 @@ elif menu == "Kayıtları İncele":
         def renklendir_sutunlar(row):
             styles = [''] * len(row)
             
-            # Takvim Durumu (Index 15)
             if row[15] == "✅":
                 styles[15] = 'background-color: #d4edda; color: black;'
             else:
                 styles[15] = 'background-color: #f8d7da; color: black;'
                 
-            # Başlangıç Tarihi (Index 11 - Yeşil)
             styles[11] = 'background-color: #d4edda; color: black;'
-            
-            # Bitiş Tarihi (Index 12 - Kırmızı)
             styles[12] = 'background-color: #f8d7da; color: black;'
             
             return styles
