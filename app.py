@@ -2,31 +2,52 @@ import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta # datetime ve timedelta zaten var, kullanıyoruz
 import uuid
 import urllib.parse
 import re
+
+# --- GÜVENLİK AYARLARI ---
+TIMEOUT_DAKIKA = 15 
+TIMEOUT = timedelta(minutes=TIMEOUT_DAKIKA)
+# --------------------------
 
 # --- SAYFA AYARLARI ---
 st.set_page_config(page_title="Sigorta Yönetim Paneli", page_icon="🛡️", layout="wide")
 
 # --- GÜVENLİK DUVARI ---
 def giris_kontrol():
-    # Düzeltildi: st.session_session -> st.session_state
     if 'giris_yapildi' not in st.session_state:
         st.session_state['giris_yapildi'] = False
+        # Zaman damgasını başlat (Çok eski bir zaman, ilk başta zaman aşımına uğramış sayılması için)
+        st.session_state['son_giris_zamani'] = datetime.min 
+        
+    # 1. ZAMAN AŞIMI KONTROLÜ (Giriş yapıldıysa)
+    if st.session_state['giris_yapildi']:
+        gecen_sure = datetime.now() - st.session_state['son_giris_zamani']
+        
+        if gecen_sure > TIMEOUT:
+            st.session_state['giris_yapildi'] = False
+            # Oturum sona erdi uyarısı ver
+            st.warning(f"⚠️ Oturum süresi doldu! {TIMEOUT_DAKIKA} dakika hareketsizlik nedeniyle lütfen yeniden şifre girin.")
 
-    # Girinti Hataları Düzeltildi
+    # 2. GİRİŞ EKRANI GÖSTERİMİ
     if not st.session_state['giris_yapildi']:
         st.header("🔒 Yönetici Girişi")
         sifre = st.text_input("Yönetici Şifresi", type="password")
         if st.button("Giriş Yap"):
             if sifre == st.secrets["admin_password"]:
                 st.session_state['giris_yapildi'] = True
+                # Başarılı girişte zaman damgasını GÜNCELLE
+                st.session_state['son_giris_zamani'] = datetime.now() 
                 st.rerun()
             else:
                 st.error("Hatalı Şifre!")
         st.stop()
+        
+    # 3. AKTİF OTURUM YENİLEME
+    # Giriş yapıldıysa, uygulamanın her yeniden çalışmasında (kullanıcı etkileşimi) zaman damgasını yenile
+    st.session_state['son_giris_zamani'] = datetime.now()
 
 giris_kontrol()
 
@@ -59,7 +80,7 @@ def google_takvim_linki_uret(baslik, bitis_tarihi_str, detay):
     except:
         return "#"
 
-# --- NİHAİ TUTAR TEMİZLEYİCİ (V5.9) ---
+# --- NİHAİ TUTAR TEMİZLEYİCİ ---
 def tutar_temizle(deger):
     s = str(deger).strip()
     
@@ -82,7 +103,7 @@ def tutar_temizle(deger):
         # US/INTL formatı (Son ayraç noktadır) -> Binlik virgülleri sil
         s = s.replace(',', '')
     
-    # Kural dışı tek nokta/virgül kaldıysa (Örn: 15.000 veya 15,000)
+    # Kural dışı tek nokta/virgül kaldıysa
     elif last_comma != -1:
          s = s.replace(',', '.') # Sadece virgül varsa ondalık kabul et
     elif last_dot != -1:
@@ -91,7 +112,6 @@ def tutar_temizle(deger):
     try:
         return float(s)
     except:
-        # Hata varsa (TC No/Bozuk veri) 0 döndür
         return 0.0
 
 def veri_hazirla(df):
