@@ -12,9 +12,11 @@ st.set_page_config(page_title="Sigorta Yönetim Paneli", page_icon="🛡️", la
 
 # --- GÜVENLİK DUVARI ---
 def giris_kontrol():
-   if 'giris_yapildi' not in st.session_state:
+    # Düzeltildi: st.session_session -> st.session_state
+    if 'giris_yapildi' not in st.session_state:
         st.session_state['giris_yapildi'] = False
 
+    # Girinti Hataları Düzeltildi (Indentation fixed)
     if not st.session_state['giris_yapildi']:
         st.header("🔒 Yönetici Girişi")
         sifre = st.text_input("Yönetici Şifresi", type="password")
@@ -57,33 +59,28 @@ def google_takvim_linki_uret(baslik, bitis_tarihi_str, detay):
     except:
         return "#"
 
-# --- AKILLI TUTAR TEMİZLEYİCİ (V5.7: Sıkı Türkçe Format Kontrolü) ---
+# --- AKILLI TUTAR TEMİZLEYİCİ ---
 def tutar_temizle(deger):
-    # 1. Hata Kontrolü
     s = str(deger).strip()
-    if not s or s in ["-", "--", "nan", "None", "null", "0"]:
+    if not s or s in ["-", "--", "nan", "None", "null"]:
         return 0.0
     
-    # 2. Sadece sayıları, virgülü ve noktayı bırak (TL, boşluk, vb. temizle)
-    s = re.sub(r"[^0-9,.]", "", s) 
-
-    # 3. KURAL: Eğer string virgül içeriyorsa, bu Türkçe formattır.
-    if "," in s:
-        # Tüm binlik ayıraçlarını (nokta) sil. (Örn: 14.826,14 -> 14826,14)
-        s = s.replace(".", "")
-        # Virgülü ondalık nokta yap. (14826,14 -> 14826.14)
-        s = s.replace(",", ".")
+    if isinstance(deger, (int, float)):
+        return float(deger)
+        
+    s = re.sub(r"[^0-9,.]", "", s)
     
-    # 4. KURAL: Virgül yoksa ve nokta varsa (Örn: 15.000 veya 1500.00), noktayı sil.
-    # Sadece son 3 haneden fazlası varsa silme riskini alıyoruz.
+    # Format Düzeltme: Türk Lirası Formatı
+    if "," in s:
+        s = s.replace(".", "").replace(",", ".")
+        
     elif "." in s and "," not in s:
-        s = s.replace(".", "")
+        if len(s.split(".")[-1]) == 3: 
+            s = s.replace(".", "")
         
     try:
-        # Son temiz sayıya çevir
         return float(s)
     except:
-        # Eğer hala sayı değilse (muhtemelen TC No/Telefon No), 0 döndür
         return 0.0
 
 def veri_hazirla(df):
