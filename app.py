@@ -106,8 +106,8 @@ def veri_hazirla(df):
 def teklif_html_uret(musteri, teklifler, acente_adi, acente_yetkili, logo_b64=None):
     logo_html = ""
     if logo_b64:
-        # LOGO BOYUTU BÜYÜTÜLDÜ (150px)
-        logo_html = f'<img src="data:image/png;base64,{logo_b64}" style="max-height: 150px; margin-bottom: 10px;">'
+        # LOGO BOYUTU BÜYÜTÜLDÜ (250px)
+        logo_html = f'<img src="data:image/png;base64,{logo_b64}" style="max-height: 250px; margin-bottom: 20px; display: block; margin-left: auto; margin-right: auto;">'
     
     html = f"""
     <html>
@@ -146,11 +146,10 @@ def teklif_html_uret(musteri, teklifler, acente_adi, acente_yetkili, logo_b64=No
     """
     
     for t in teklifler:
-        # Fiyatın temizlenip formatlanması
         try:
             fiyat_formatli = float(t['fiyat'])
         except ValueError:
-            fiyat_formatli = 0.0 # Eğer fiyat girilmemişse veya hatalıysa sıfır göster
+            fiyat_formatli = 0.0
             
         html += f"""
             <tr>
@@ -183,7 +182,9 @@ try:
     df = pd.DataFrame(data)
     df = veri_hazirla(df)
 except:
+    st.error(f"Veri yüklenemedi: Lütfen Google Sheets bağlantısını kontrol edin.")
     df = pd.DataFrame()
+
 
 # --- 1. YENİ POLİÇE ---
 if menu == "Yeni Poliçe Kes":
@@ -239,7 +240,7 @@ if menu == "Yeni Poliçe Kes":
                     str(baslangic), str(bitis), tutar, notlar, "Hayır"
                 ]
                 sheet.append_row(yeni_veri)
-                st.success(f"✅ Kayıt Başarılı! (Poliçe No: {oto_police_no})")
+                st.success("Kaydedildi!")
 
 # --- 2. İNCELEME VE TAKVİM ---
 elif menu == "Kayıtları İncele":
@@ -370,7 +371,7 @@ elif menu == "Raporlar":
 # --- 4. TEKLİF SİHİRBAZI 🪄 (GÜNCELLENDİ) ---
 elif menu == "Teklif Sihirbazı 🪄":
     st.header("✨ Profesyonel Teklif Hazırla")
-    st.info("Müşteriye sunmak istediğiniz teklifleri aşağıya girin. Artık '+' butonu ile yeni teklif alanları ekleyebilirsiniz.")
+    st.info("Müşteriye sunmak istediğiniz teklifleri aşağıya girin.")
 
     # Oturumda offer_count yoksa, 3 ile başlat
     if 'offer_count' not in st.session_state:
@@ -393,7 +394,7 @@ elif menu == "Teklif Sihirbazı 🪄":
 
     with col_acente:
         acente_adi = st.text_input("Acente Adı:", value="Erikciler Sigorta", key="acente_adi")
-        acente_yetkili = st.text_input("Acente Yetkilisi:", value="Sedat Ay", key="acente_yetkili")
+        acente_yetkili = st.text_input("Acente Yetkilisi:", value="Sedat Ay", key="acente_yetkilisi")
     
     st.markdown("---")
 
@@ -436,7 +437,7 @@ elif menu == "Teklif Sihirbazı 🪄":
         if not musteri_ad or not teklifler:
             st.error("Lütfen müşteri adı ve en az bir geçerli teklif giriniz.")
         else:
-            # HTML Oluştur (Logo ve Acente Bilgileri ile)
+            # HTML Oluştur
             html_content = teklif_html_uret(
                 musteri_ad, 
                 teklifler, 
@@ -446,12 +447,12 @@ elif menu == "Teklif Sihirbazı 🪄":
             )
             
             # Önizleme
-            st.success("Teklif başarıyla oluşturuldu! Aşağıdan önizleyebilir veya indirebilirsiniz.")
+            st.success("Teklif başarıyla oluşturuldu! Aşağıdan önizleyebilir ve indirebilirsiniz.")
             st.components.v1.html(html_content, height=500, scrolling=True)
             
-            # İndirme Butonu
+            # İndirme Butonu (HTML'den PDF'e çevirme rehberliği ile)
             b64_html = base64.b64encode(html_content.encode()).decode()
-            href = f'<a href="data:text/html;base64,{b64_html}" download="{musteri_ad}_Teklif.html" style="background-color:#28a745; color:white; padding:15px; text-decoration:none; border-radius:5px; font-weight:bold;">📥 Teklifi İndir (HTML)</a>'
+            href = f'<a href="data:text/html;base64,{b64_html}" download="{musteri_ad}_Teklif.html" style="background-color:#28a745; color:white; padding:15px; text-decoration:none; border-radius:5px; font-weight:bold;">📥 HTML İndir (PDF Kaydetmek İçin)</a>'
             st.markdown(href, unsafe_allow_html=True)
             
-            st.info("💡 İPUCU: İndirdiğiniz HTML dosyasını açıp tarayıcınızdan PDF olarak kaydedebilir (Ctrl+P) veya ekran görüntüsü alarak WhatsApp'tan gönderebilirsiniz.")
+            st.info("💡 PDF KAYIT TALİMATI: İndirdiğiniz HTML dosyasını açın ve tarayıcınızdan **Ctrl+P** (Mac'te Command+P) yaparak, açılan pencerede Hedef (Destination) olarak **'PDF Olarak Kaydet'**i seçin.")
