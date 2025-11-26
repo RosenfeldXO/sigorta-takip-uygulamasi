@@ -102,11 +102,12 @@ def veri_hazirla(df):
         df['Tutar_Sayi'] = df['Tutar'].apply(tutar_temizle)
     return df
 
-# --- HTML TEKLİF ŞABLONU OLUŞTURUCU (YENİLENDİ) ---
+# --- HTML TEKLİF ŞABLONU OLUŞTURUCU (YENİ LİFE) ---
 def teklif_html_uret(musteri, teklifler, acente_adi, acente_yetkili, logo_b64=None):
     logo_html = ""
     if logo_b64:
-        logo_html = f'<img src="data:image/png;base64,{logo_b64}" style="max-height: 80px; margin-bottom: 10px;">' # Logonun max yüksekliği
+        # LOGO BOYUTU BÜYÜTÜLDÜ (150px)
+        logo_html = f'<img src="data:image/png;base64,{logo_b64}" style="max-height: 150px; margin-bottom: 10px;">'
     
     html = f"""
     <html>
@@ -145,11 +146,17 @@ def teklif_html_uret(musteri, teklifler, acente_adi, acente_yetkili, logo_b64=No
     """
     
     for t in teklifler:
+        # Fiyatın temizlenip formatlanması
+        try:
+            fiyat_formatli = float(t['fiyat'])
+        except ValueError:
+            fiyat_formatli = 0.0 # Eğer fiyat girilmemişse veya hatalıysa sıfır göster
+            
         html += f"""
             <tr>
                 <td><strong>{t['firma']}</strong></td>
                 <td>{t['ozellik']}</td>
-                <td class="fiyat">{float(t['fiyat']):,.2f} TL</td>
+                <td class="fiyat">{fiyat_formatli:,.2f} TL</td>
             </tr>
         """
         
@@ -363,33 +370,30 @@ elif menu == "Raporlar":
 # --- 4. TEKLİF SİHİRBAZI 🪄 (GÜNCELLENDİ) ---
 elif menu == "Teklif Sihirbazı 🪄":
     st.header("✨ Profesyonel Teklif Hazırla")
-    st.info("Müşteriye sunmak istediğiniz teklifleri aşağıya girin. Sistem otomatik bir sunum dosyası hazırlayacaktır.")
+    st.info("Müşteriye sunmak istediğiniz teklifleri aşağıya girin. Artık '+' butonu ile yeni teklif alanları ekleyebilirsiniz.")
 
-    # Acente Bilgileri ve Logo Yükleyici (YENİ EKLENDİ)
+    # Oturumda offer_count yoksa, 3 ile başlat
+    if 'offer_count' not in st.session_state:
+        st.session_state['offer_count'] = 3
+    
+    # --- Acente Ayarları ve Logo Yükleyici ---
     st.subheader("⚙️ Acente Ayarları")
     col_logo, col_acente = st.columns([1, 2])
     
     with col_logo:
-        # Session state'te logo yoksa veya yeni logo yüklenmek isteniyorsa
-        if 'logo_b64' not in st.session_state:
-             st.session_state['logo_b64'] = None
+        if 'logo_b64' not in st.session_state: st.session_state['logo_b64'] = None
 
         uploaded_logo = st.file_uploader("Logo Yükle (PNG/JPG)", type=["png", "jpg", "jpeg"], key="logo_uploader")
         if uploaded_logo is not None:
             st.session_state['logo_b64'] = base64.b64encode(uploaded_logo.getvalue()).decode()
             st.success("Logo yüklendi!")
-            # Yüklenen logonun önizlemesi
             st.image(uploaded_logo, caption="Yüklenen Logo", width=100)
         elif st.session_state['logo_b64']:
             st.image(f"data:image/png;base64,{st.session_state['logo_b64']}", caption="Mevcut Logo", width=100)
 
     with col_acente:
-        # Varsayılan değerler
-        default_acente_adi = "Erikciler Sigorta"
-        default_acente_yetkili = "Sedat Ay"
-        
-        acente_adi = st.text_input("Acente Adı:", value=default_acente_adi, key="acente_adi")
-        acente_yetkili = st.text_input("Acente Yetkilisi:", value=default_acente_yetkili, key="acente_yetkili")
+        acente_adi = st.text_input("Acente Adı:", value="Erikciler Sigorta", key="acente_adi")
+        acente_yetkili = st.text_input("Acente Yetkilisi:", value="Sedat Ay", key="acente_yetkili")
     
     st.markdown("---")
 
@@ -398,39 +402,39 @@ elif menu == "Teklif Sihirbazı 🪄":
 
     st.markdown("---")
     
-    col1, col2, col3 = st.columns(3)
-    
+    # --- DİNAMİK TEKLİF GİRİŞİ ---
+    st.subheader("📝 Teklif Girişleri")
+
+    # + Butonuna basıldığında sayacı artır
+    if st.button("+ Teklif Ekle", key="add_offer"):
+        st.session_state['offer_count'] += 1
+        st.rerun()
+
     teklifler = []
+    
+    # Teklifleri döngü ile oluştur
+    for i in range(st.session_state['offer_count']):
+        st.markdown(f"#### {i+1}. Teklif")
+        cols = st.columns([1.5, 3, 1.5])
+        
+        with cols[0]:
+            f = st.selectbox("Firma", ["Allianz", "Axa", "Anadolu", "Sompo", "Mapfre", "Türkiye Sigorta", "HDI", "Diğer"], key=f"f_{i}_sb", label_visibility="collapsed")
+        
+        with cols[1]:
+            o = st.text_area("Özellikler (İMM, İkame...)", key=f"o_{i}_ta", height=50, label_visibility="collapsed", placeholder="Kapsam/Ek Özellikler")
+        
+        with cols[2]:
+            p = st.text_input("Fiyat (TL)", key=f"p_{i}_ti", label_visibility="collapsed", placeholder="Fiyat (Sadece rakam)")
+        
+        if p and p.strip() != "": 
+            teklifler.append({"firma": f, "ozellik": o, "fiyat": p})
+        
+        st.markdown("---")
 
-    # 1. Teklif
-    with col1:
-        st.subheader("1. Seçenek")
-        f1 = st.selectbox("Firma 1", ["Allianz", "Axa", "Anadolu", "Sompo", "Mapfre", "Türkiye Sigorta", "HDI", "Diğer"], key="f1_sb")
-        o1 = st.text_area("Özellikler (İMM, İkame...)", key="o1_ta", height=100)
-        p1 = st.text_input("Fiyat 1 (TL)", key="p1_ti")
-        if p1: teklifler.append({"firma": f1, "ozellik": o1, "fiyat": p1})
-
-    # 2. Teklif
-    with col2:
-        st.subheader("2. Seçenek")
-        f2 = st.selectbox("Firma 2", ["Axa", "Allianz", "Anadolu", "Sompo", "Mapfre", "Türkiye Sigorta", "HDI", "Diğer"], key="f2_sb")
-        o2 = st.text_area("Özellikler", key="o2_ta", height=100)
-        p2 = st.text_input("Fiyat 2 (TL)", key="p2_ti")
-        if p2: teklifler.append({"firma": f2, "ozellik": o2, "fiyat": p2})
-
-    # 3. Teklif (Opsiyonel)
-    with col3:
-        st.subheader("3. Seçenek (Opsiyonel)")
-        f3 = st.selectbox("Firma 3", ["Sompo", "Allianz", "Axa", "Anadolu", "Mapfre", "Türkiye Sigorta", "HDI", "Diğer"], key="f3_sb")
-        o3 = st.text_area("Özellikler", key="o3_ta", height=100)
-        p3 = st.text_input("Fiyat 3 (TL)", key="p3_ti")
-        if p3: teklifler.append({"firma": f3, "ozellik": o3, "fiyat": p3})
-
-    st.markdown("---")
-
-    if st.button("🚀 Teklif Sunumu Oluştur"):
+    # --- SUNUM BUTONU VE ÇIKTI ---
+    if st.button("🚀 Teklif Sunumu Oluştur", key="generate_final"):
         if not musteri_ad or not teklifler:
-            st.error("Lütfen müşteri adı ve en az bir teklif giriniz.")
+            st.error("Lütfen müşteri adı ve en az bir geçerli teklif giriniz.")
         else:
             # HTML Oluştur (Logo ve Acente Bilgileri ile)
             html_content = teklif_html_uret(
@@ -450,4 +454,4 @@ elif menu == "Teklif Sihirbazı 🪄":
             href = f'<a href="data:text/html;base64,{b64_html}" download="{musteri_ad}_Teklif.html" style="background-color:#28a745; color:white; padding:15px; text-decoration:none; border-radius:5px; font-weight:bold;">📥 Teklifi İndir (HTML)</a>'
             st.markdown(href, unsafe_allow_html=True)
             
-            st.info("💡 İPUCU: İndirdiğiniz HTML dosyasını açıp web tarayıcınızdan PDF olarak kaydedebilir (Ctrl+P -> Hedef: PDF olarak kaydet) veya ekran görüntüsü alarak WhatsApp'tan gönderebilirsiniz.")
+            st.info("💡 İPUCU: İndirdiğiniz HTML dosyasını açıp tarayıcınızdan PDF olarak kaydedebilir (Ctrl+P) veya ekran görüntüsü alarak WhatsApp'tan gönderebilirsiniz.")
